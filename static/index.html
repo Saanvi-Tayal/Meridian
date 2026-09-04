@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Smartphone Dead Reckoning | GNSS-Denied Navigation</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0b0f19',
+                        darkcard: '#111827',
+                        accentblue: '#3b82f6',
+                        accentsuccess: '#10b981',
+                        accentdanger: '#ef4444',
+                        accentwarning: '#f59e0b'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-darkbg text-gray-100 min-h-screen flex flex-col font-sans antialiased select-none">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-darkcard border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-md">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    SMARTPHONE DEAD RECKONING
+                    <span class="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800 font-mono">SIH 2024</span>
+                </h1>
+                <p class="text-xs text-gray-400">Multi-Sensor AI SpeedNet + 15-State ES-EKF + HMM Lane Snapping</p>
+            </div>
+        </div>
+
+        <!-- Mode & Blackout Indicator Badge -->
+        <div class="flex items-center space-x-4">
+            <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold bg-green-950 text-green-400 border border-green-800">
+                <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                <span id="statusText">GNSS ACTIVE</span>
+            </div>
+
+            <!-- Global GPS Blackout Switch -->
+            <div class="flex items-center space-x-2 bg-gray-800/80 px-3 py-1.5 rounded-lg border border-gray-700">
+                <span class="text-xs font-medium text-gray-300">TUNNEL / GPS BLACKOUT:</span>
+                <button id="blackoutBtn" class="px-3 py-1 rounded text-xs font-bold transition-all duration-200 bg-red-600 hover:bg-red-700 text-white shadow">
+                    DROP GNSS
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="flex-1 flex overflow-hidden p-4 gap-4">
+        
+        <!-- Left Panel: Interactive Map & Live Waveforms (70%) -->
+        <div class="w-3/4 flex flex-col gap-4">
+            
+            <!-- Map Container -->
+            <div class="relative flex-1 rounded-xl overflow-hidden border border-gray-800 shadow-2xl bg-gray-900">
+                <div id="map" class="w-full h-full"></div>
+
+                <!-- Map Layer Legend Overlay -->
+                <div class="absolute bottom-4 left-4 bg-gray-900/90 backdrop-blur border border-gray-800 p-3 rounded-lg text-xs space-y-1 z-[1000] shadow-lg">
+                    <div class="font-bold text-gray-300 mb-1">Navigation Layers</div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-1 bg-gray-400 rounded"></span>
+                        <span class="text-gray-300">Ground Truth (Ref)</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-1 bg-blue-500 rounded"></span>
+                        <span class="text-blue-400">GNSS Raw</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-1 bg-amber-500 rounded"></span>
+                        <span class="text-amber-400">AI SpeedNet + ES-EKF</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-1 bg-emerald-500 rounded"></span>
+                        <span class="text-emerald-400">HMM Lane-Snapped</span>
+                    </div>
+                </div>
+
+                <!-- Blackout Alert Banner Overlay -->
+                <div id="blackoutAlert" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-600 text-red-300 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider animate-bounce shadow-2xl z-[1000] flex items-center gap-2">
+                    <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    CRITICAL: GNSS DENIED — DEAD RECKONING ENGAGED
+                </div>
+            </div>
+
+            <!-- Bottom Controller Bar -->
+            <div class="bg-darkcard border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-lg">
+                <div class="flex items-center space-x-3">
+                    <select id="tripSelect" class="bg-gray-800 border border-gray-700 text-xs rounded px-3 py-1.5 text-gray-200 outline-none focus:border-blue-500">
+                        <option value="">Loading trips...</option>
+                    </select>
+                    <button id="loadTripBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-medium transition">
+                        Load Trip
+                    </button>
+                    <button id="playBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded text-xs font-bold transition flex items-center gap-1">
+                        <span>▶</span> Run Playback
+                    </button>
+                    <button id="resetBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs transition">
+                        Reset
+                    </button>
+                </div>
+
+                <!-- Playback Progress Slider -->
+                <div class="flex-1 mx-6 flex items-center space-x-3">
+                    <span class="text-xs font-mono text-gray-400" id="progressText">0%</span>
+                    <input id="progressSlider" type="range" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+
+                <!-- Step Speed Controls -->
+                <div class="flex items-center space-x-2 text-xs text-gray-400">
+                    <span>Speed:</span>
+                    <button class="speed-btn px-2 py-1 bg-gray-800 rounded border border-gray-700 text-blue-400 font-bold" data-speed="1">1x</button>
+                    <button class="speed-btn px-2 py-1 bg-gray-800 rounded border border-gray-700 hover:text-white" data-speed="2">2x</button>
+                    <button class="speed-btn px-2 py-1 bg-gray-800 rounded border border-gray-700 hover:text-white" data-speed="5">5x</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Telemetry HUD, SIH Compliance & Sensor Feed (25%) -->
+        <div class="w-1/4 flex flex-col gap-4 overflow-y-auto pr-1">
+
+            <!-- SIH Compliance Monitor Card -->
+            <div class="bg-darkcard border border-gray-800 rounded-xl p-4 shadow-lg">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
+                    <span>SIH Precision Benchmark</span>
+                    <span id="sihBadge" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">PASS</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+                        <div class="text-[11px] text-gray-400">Drift Ratio</div>
+                        <div id="driftPercentVal" class="text-xl font-black text-emerald-400 font-mono">0.0%</div>
+                        <div class="text-[10px] text-gray-500">Benchmark: &lt; 10.0%</div>
+                    </div>
+                    <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+                        <div class="text-[11px] text-gray-400">Abs Drift</div>
+                        <div id="absDriftVal" class="text-xl font-black text-amber-400 font-mono">0.0 m</div>
+                        <div class="text-[10px] text-gray-500">Local NED Euclidean</div>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                    <div id="driftProgressBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 2%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+                    <span>0% (Perfect)</span>
+                    <span class="text-red-400 font-bold">10% Limit</span>
+                    <span>20%</span>
+                </div>
+            </div>
+
+            <!-- Vehicle Kinematics HUD -->
+            <div class="bg-darkcard border border-gray-800 rounded-xl p-4 shadow-lg">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Vehicle Kinematics</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-gray-900/80 p-3 rounded-lg border border-gray-800 flex flex-col items-center">
+                        <span class="text-[11px] text-gray-400">Speed (AI Net)</span>
+                        <span id="speedVal" class="text-2xl font-black text-white font-mono my-1">0.0</span>
+                        <span class="text-[10px] text-gray-500 font-mono">km/h</span>
+                    </div>
+                    <div class="bg-gray-900/80 p-3 rounded-lg border border-gray-800 flex flex-col items-center">
+                        <span class="text-[11px] text-gray-400">Heading</span>
+                        <span id="headingVal" class="text-2xl font-black text-white font-mono my-1">0.0°</span>
+                        <span class="text-[10px] text-gray-500 font-mono" id="headingCompass">N</span>
+                    </div>
+                </div>
+                <div class="mt-3 bg-gray-900/80 p-2.5 rounded-lg border border-gray-800 flex justify-between items-center text-xs">
+                    <span class="text-gray-400">Tunnel Distance:</span>
+                    <span id="blackoutDistVal" class="font-mono text-white font-bold">0.0 m</span>
+                </div>
+                <div class="mt-2 bg-gray-900/80 p-2.5 rounded-lg border border-gray-800 flex justify-between items-center text-xs">
+                    <span class="text-gray-400">Covariance Uncertainty (1σ):</span>
+                    <span id="uncertaintyVal" class="font-mono text-blue-400 font-bold">±0.25 m</span>
+                </div>
+            </div>
+
+            <!-- Live IMU Real-time Waveform Canvas -->
+            <div class="bg-darkcard border border-gray-800 rounded-xl p-4 shadow-lg flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">IMU Stream (100 Hz)</span>
+                    <span class="text-[10px] text-gray-500 font-mono">Accel & Gyro</span>
+                </div>
+                <div class="flex-1 relative min-h-[140px] bg-gray-900/90 rounded-lg p-2 border border-gray-800">
+                    <canvas id="imuChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Mobile Live Sensor Stream Toggle -->
+            <div class="bg-darkcard border border-gray-800 rounded-xl p-4 shadow-lg">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Live Mobile Sensor Mode</div>
+                <p class="text-[11px] text-gray-400 mb-3">Enable HTML5 device motion sensors to stream live acceleration and gyroscope from this phone mount.</p>
+                <button id="mobileStreamBtn" class="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold transition">
+                    Activate Phone IMU
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/sensors.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

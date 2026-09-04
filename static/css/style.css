@@ -1,0 +1,31 @@
+﻿/* Custom Styling for Dead Reckoning Dashboard */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Custom Leaflet Map styling to match dark mode */
+.leaflet-container {
+    background: #0b0f19 !important;
+}
+
+.car-marker-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s linear;
+}
+
+.car-icon {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+}
