@@ -1,10 +1,4 @@
-Side Question: write readme only abt ml models, wht they do and wht files and hmm map matching, , noise pre filtering and syanmic in vehivle alignment 
-maybe module wise, state error too , Closed-Loop Reacquisition Calibration. results too .
-short readme, to the point , easy readble language not very scientific .
-
-Here is a concise, easy-to-read README focusing directly on the core modules, what they do, their key files, and the achieved results:
-
----
+-
 
 # 🚗 Smartphone Dead Reckoning & Navigation Engine
 
